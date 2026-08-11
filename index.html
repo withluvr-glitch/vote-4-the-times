@@ -2,20 +2,20 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <title>로아 그룹별 일정 집계 페이지</title>
+  <title>로아 일정 조율용 페이지</title>
   <style>
-/* 🍁 메이플스토리체 웹폰트 */
-@font-face {
-    font-family: 'MaplestoryOTFBold';
-    src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/MaplestoryOTFBold.woff') format('woff');
-    font-weight: normal;
-    font-style: normal;
-}
+    /* 🍁 메이플스토리체 웹폰트 */
+    @font-face {
+        font-family: 'MaplestoryOTFBold';
+        src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/MaplestoryOTFBold.woff') format('woff');
+        font-weight: normal;
+        font-style: normal;
+    }
 
-body, input, select, button { 
-    font-family: 'MaplestoryOTFBold', sans-serif; 
-    color: #222222;
-}
+    body, input, select, button { 
+        font-family: 'MaplestoryOTFBold', sans-serif; 
+        color: #222222;
+    }
 
     /* 🖼️ 선명한 배경 이미지 설정 */
     body { 
@@ -31,7 +31,7 @@ body, input, select, button {
         background-repeat: no-repeat;
     }
 
-    /* 중앙 메인 컨테이너 (투명도 조절) */
+    /* 중앙 메인 컨테이너 */
     .main-container {
         max-width: 950px;
         margin: 0 auto;
@@ -53,16 +53,21 @@ body, input, select, button {
         border-radius: 8px;
     }
 
-    /* 표 스타일 */
-    table { 
-        border-collapse: collapse; 
-        margin-top: 15px; 
-        width: 100%; 
-        background: rgba(255, 255, 255, 0.35); 
-        user-select: none; 
-    }
-    th, td { border: 1px solid rgba(0, 0, 0, 0.35); padding: 12px; text-align: center; min-width: 70px; }
-    th { background-color: rgba(244, 244, 244, 0.7); font-weight: 700; color: #111; }
+    /* 표 스타일 (배경 투명도 적용) */
+table { 
+    border-collapse: collapse; 
+    margin-top: 15px; 
+    width: 100%; 
+    background: rgba(255, 255, 255, 0.35); /* 👈 원래 수치로 복구 */
+    user-select: none; 
+}
+
+/* 표 헤더 (시간/요일 제목 칸) */
+th { 
+    background-color: rgba(244, 244, 244, 0.7); /* 👈 원래 수치로 복구 */
+    font-weight: 700; 
+    color: #111; 
+}
     .cell { cursor: pointer; user-select: none; }
     .cell.selected { background-color: rgba(168, 230, 207, 0.85) !important; }
     .result-cell { font-weight: 700; transition: background-color 0.2s; cursor: pointer; }
@@ -77,8 +82,18 @@ body, input, select, button {
     button { cursor: pointer; font-weight: 700; }
     .master-btn { background-color: #4a90e2; color: white; border: none; }
     .master-btn:hover { background-color: #357abd; }
-    .admin-btn { background-color: #ff4d4d; color: white; border: none; margin-left: auto; }
-    .admin-btn:hover { background-color: #cc0000; }
+    
+    /* ⬛ 초기화 버튼 스타일 (크기 축소 및 검정색) */
+    .admin-btn { 
+        background-color: #222222; 
+        color: white; 
+        border: none; 
+        margin-left: auto; 
+        padding: 5px 8px; 
+        font-size: 12px; 
+    }
+    .admin-btn:hover { background-color: #000000; }
+    
     .info-tip { font-size: 13px; color: #333; margin-top: 5px; font-weight: 500; }
   </style>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
@@ -87,7 +102,7 @@ body, input, select, button {
 <body>
 
   <div class="main-container">
-    <h2>📅 로아 일정 조율용 페이지</h2>
+    <h2>📅 공대별 일정 조율 페이지</h2>
     <p>그룹을 선택하고 비밀번호를 입력한 뒤, 가능하신 시간대를 클릭 또는 드래그하여 [일정 제출]을 누르세요.</p>
     
     <div class="control-panel">
@@ -105,7 +120,8 @@ body, input, select, button {
       <label>캐릭터명: <input type="text" id="userName" placeholder="캐릭터명" style="width: 100px;"></label>
       <button onclick="submitVote()">일정 제출</button>
       
-      <button class="admin-btn" onclick="resetData()">⚙️ 데이터 초기화</button>
+      <!-- 👑 제작자 전용 축소된 검정 초기화 버튼 -->
+      <button class="admin-btn" onclick="resetData()">⚙️ 데이터 초기화 (제작자)</button>
     </div>
 
     <table id="scheduleTable">
@@ -163,7 +179,7 @@ const firebaseConfig = {
       }
     }
 
-    // 1️⃣ DB에서 그룹 목록 가져오기
+    // 1️⃣ DB에서 그룹 목록 가져오기 (순서 order 기준 정렬)
     function listenGroups() {
       db.ref('groups').on('value', (snapshot) => {
         groupsData = snapshot.val();
@@ -171,7 +187,8 @@ const firebaseConfig = {
         if (!groupsData || Object.keys(groupsData).length === 0) {
           db.ref('groups/default_group').set({
             name: "기본 그룹",
-            password: "1234"
+            password: "1234",
+            order: 1
           });
           return;
         }
@@ -180,7 +197,14 @@ const firebaseConfig = {
         const currentSelected = groupSelect.value;
         groupSelect.innerHTML = '';
 
-        Object.keys(groupsData).forEach(groupId => {
+        // order 속성을 기준으로 그룹 정렬
+        const sortedKeys = Object.keys(groupsData).sort((a, b) => {
+          const orderA = groupsData[a].order ?? 999;
+          const orderB = groupsData[b].order ?? 999;
+          return orderA - orderB;
+        });
+
+        sortedKeys.forEach(groupId => {
           const option = document.createElement('option');
           option.value = groupId;
           option.innerText = groupsData[groupId].name;
@@ -244,7 +268,7 @@ const firebaseConfig = {
       listenWeekData();
     }
 
-    // 👑 2️⃣ 제작자 그룹 관리
+    // 👑 2️⃣ 제작자 그룹 관리 (그룹 순서 변경 기능 추가)
     function manageGroups() {
       const masterPass = prompt("👑 제작자 마스터 비밀번호를 입력하세요:");
       if (masterPass === null) return;
@@ -263,7 +287,8 @@ const firebaseConfig = {
         `1 : 새로운 그룹 생성\n` +
         `2 : 현재 선택된 그룹 이름 변경\n` +
         `3 : 현재 선택된 그룹 비밀번호 변경\n` +
-        `4 : 현재 선택된 그룹 삭제`
+        `4 : 현재 선택된 그룹 삭제\n` +
+        `5 : 그룹 표시 순서 변경`
       );
 
       if (choice === '1') {
@@ -274,9 +299,12 @@ const firebaseConfig = {
         if (!groupPass) return;
 
         const newGroupId = 'group_' + Date.now();
+        const currentTotal = Object.keys(groupsData).length;
+
         db.ref(`groups/${newGroupId}`).set({
           name: groupName,
-          password: groupPass
+          password: groupPass,
+          order: currentTotal + 1
         }).then(() => alert(`'${groupName}' 그룹이 생성되었습니다!`))
           .catch((err) => alert("생성 실패: " + err.message));
 
@@ -318,6 +346,28 @@ const firebaseConfig = {
           db.ref(`votes/${groupId}`).remove()
             .then(() => alert(`[${currentName}] 그룹이 삭제되었습니다.`));
         }
+
+      } else if (choice === '5') {
+        // 🔄 5번: 그룹 순서 변경
+        if (!groupId || !groupsData[groupId]) {
+          alert("순서를 변경할 그룹을 먼저 선택해주세요.");
+          return;
+        }
+
+        const currentOrder = groupsData[groupId].order ?? 1;
+        const newOrderInput = prompt(`[${currentName}] 그룹의 순서 번호를 입력하세요 (현재 순서: ${currentOrder})\n* 숫자가 작을수록 목록 맨 위에 표시됩니다.`, currentOrder);
+        
+        if (newOrderInput === null) return;
+        const newOrder = parseInt(newOrderInput, 10);
+
+        if (isNaN(newOrder)) {
+          alert("올바른 숫자 번호를 입력해주세요.");
+          return;
+        }
+
+        db.ref(`groups/${groupId}/order`).set(newOrder)
+          .then(() => alert(`[${currentName}] 그룹의 순서가 ${newOrder}번으로 변경되었습니다.`))
+          .catch((err) => alert("순서 변경 실패: " + err.message));
       }
     }
 
@@ -365,7 +415,7 @@ const firebaseConfig = {
 
     let currentListener = null;
 
-    // 4️⃣ 실시간 데이터 연결 (8명까지 인원 색상 세분화)
+    // 4️⃣ 실시간 데이터 연결
     function listenWeekData() {
       const groupSelect = document.getElementById('groupSelect');
       const groupId = groupSelect.value;
@@ -418,22 +468,24 @@ const firebaseConfig = {
             const voterList = voterMap[key] || [];
             const count = voterList.length;
             
-            // 8명 기준 투표 색상 스케일
+            // 8단계 득표 색상 스케일
             let bg = 'rgba(255, 255, 255, 0.3)';
             let color = '#222222';
 
             if (count === 1) bg = 'rgba(254, 240, 138, 0.85)';
             else if (count === 2) bg = 'rgba(253, 186, 116, 0.85)';
             else if (count === 3) bg = 'rgba(248, 113, 113, 0.85)';
-            else if (count === 4) bg = 'rgba(220, 38, 38, 0.9)';
+            else if (count === 4) { bg = 'rgba(220, 38, 38, 0.95)'; color = '#ffffff'; }
             else if (count === 5) bg = 'rgba(224, 242, 254, 0.85)';
             else if (count === 6) bg = 'rgba(186, 230, 253, 0.85)';
             else if (count === 7) bg = 'rgba(125, 211, 252, 0.85)';
-            else if (count >= 8) { bg = 'rgba(16, 185, 129, 0.9)'; color = '#ffffff'; }
+            else if (count >= 8) { bg = 'rgba(16, 185, 129, 0.95)'; color = '#ffffff'; }
 
-            const titleAttr = count > 0 ? `title="참여 유저: ${voterList.join(', ')}"` : 'title="참여자 없음"';
+           // 0명일 때는 텍스트를 비우고, 1명 이상일 때만 'X명'으로 표시
+const cellText = count > 0 ? `${count}명` : '';
+const titleAttr = count > 0 ? `title="참여 유저: ${voterList.join(', ')}"` : '';
 
-            html += `<td class="result-cell" ${titleAttr} style="background-color: ${bg}; color: ${color};">${count}명</td>`;
+html += `<td class="result-cell" ${titleAttr} style="background-color: ${bg}; color: ${color};">${cellText}</td>`;
           });
           html += '</tr>';
         });
@@ -443,21 +495,24 @@ const firebaseConfig = {
       });
     }
 
-    // 5️⃣ 데이터 초기화
+    // 👑 5️⃣ 제작자 전용 데이터 초기화
     function resetData() {
-      const groupSelect = document.getElementById('groupSelect');
-      const groupId = groupSelect.value;
-      if (!groupId || !groupsData[groupId]) return;
+      const masterPass = prompt("👑 제작자 마스터 비밀번호를 입력하세요:");
+      if (masterPass === null) return;
 
-      const groupName = groupsData[groupId].name;
-      const correctPass = groupsData[groupId].password;
-      const inputPassword = document.getElementById('groupPassword').value;
-
-      if (inputPassword !== correctPass) {
-        alert(`[${groupName}] 그룹 비밀번호가 올바르지 않아 초기화할 수 없습니다.`);
+      if (masterPass !== MASTER_ADMIN_PASSWORD) {
+        alert("제작자 비밀번호가 일치하지 않습니다.");
         return;
       }
 
+      const groupSelect = document.getElementById('groupSelect');
+      const groupId = groupSelect.value;
+      if (!groupId || !groupsData[groupId]) {
+        alert("초기화할 그룹이 선택되지 않았습니다.");
+        return;
+      }
+
+      const groupName = groupsData[groupId].name;
       const weekSelect = document.getElementById('weekSelect');
       const weekKey = weekSelect.value;
       const selectedOptionText = weekSelect.options[weekSelect.selectedIndex].text;
