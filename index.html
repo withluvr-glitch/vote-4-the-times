@@ -405,10 +405,14 @@ const firebaseConfig = {
             let bg = '#ffffff';
             let color = '#333333';
 
-            if (count === 1) bg = '#B2F2BB';
-            else if (count === 2) bg = '#FFF3BF';
-            else if (count === 3) bg = '#FFD8A8';
-            else if (count >= 4) bg = '#FFC9C9';
+            if (count === 1) bg = '#64AAFF';
+            else if (count === 2) bg = '#6496FF';
+            else if (count === 3) bg = '#6478FF';
+            else if (count === 4) bg = '#0000FF';
+            else if (count === 5) bg = '#3CB4FF';
+            else if (count === 6) bg = '#28A0FF';
+            else if (count === 7) bg = '#148CFF';
+            else if (count >= 8) bg = '#0078FF';
 
             const titleAttr = count > 0 ? `title="참여 유저: ${voterList.join(', ')}"` : 'title="참여자 없음"';
 
