@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>로아 레이드 일정 조율 페이지</title>
+  <style>
+    /* 🍁 메이플스토리체 웹폰트 */
+    @font-face {
+        font-family: 'MaplestoryOTFBold';
+        src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_20-04@2.1/MaplestoryOTFBold.woff') format('woff');
+        font-weight: normal;
+        font-style: normal;
+    }
+
+    body, input, select, button { 
+        font-family: 'MaplestoryOTFBold', sans-serif; 
+    }
+
+    /* 🖼️ 은은한 배경 이미지 설정 */
+    body { 
+        margin: 0;
+        padding: 20px; 
+        min-height: 100vh;
+        box-sizing: border-box;
+        position: relative;
+        background-image: url('bg.jpg'); /* 👈 깃허브 이미지 파일명 */
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        background-repeat: no-repeat;
+    }
+
+    body::before {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.75);
+        z-index: -1;
+    }
+
+    .main-container {
+        max-width: 950px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.85);
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        backdrop-filter: blur(5px);
+    }
+
+    table { border-collapse: collapse; margin-top: 15px; width: 100%; background: #ffffff; user-select: none; }
+    th, td { border: 1px solid #ccc; padding: 12px; text-align: center; min-width: 70px; }
+    th { background-color: #f4f4f4; }
+    .cell { cursor: pointer; user-select: none; }
+    .cell.selected { background-color: #a8e6cf !important; }
+    .result-cell { font-weight: bold; transition: background-color 0.2s; cursor: pointer; }
+    
+    .control-panel { 
+        margin-bottom: 15px; 
+        display: flex; 
+        gap: 10px; 
+        align-items: center; 
+        flex-wrap: wrap; 
+        background: rgba(255, 255, 255, 0.9);
+        padding: 12px;
+        border-radius: 8px;
+    }
+    
+    select, input, button { padding: 8px; font-size: 14px; border-radius: 4px; border: 1px solid #ccc; }
+    button { cursor: pointer; }
+    .master-btn { background-color: #4a90e2; color: white; border: none; }
+    .master-btn:hover { background-color: #357abd; }
+    .admin-btn { background-color: #ff4d4d; color: white; border: none; margin-left: auto; }
+    .admin-btn:hover { background-color: #cc0000; }
+    .info-tip { font-size: 12px; color: #666; margin-top: 5px; }
+  </style>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+</head>
+<body>
+
+  <div class="main-container">
+    <h2>📅 로아 일정 조율 페이지</h2>
+    <p>그룹을 선택하고 비밀번호를 입력한 뒤, 가능하신 시간대를 클릭 또는 드래그하여 [일정 제출]을 누르세요.</p>
+    
+    <div class="control-panel">
+      <label>🛡️ 그룹 선택: 
+        <select id="groupSelect" onchange="onGroupChange()">
+          <option value="">그룹 불러오는 중...</option>
+        </select>
+      </label>
+      <button class="master-btn" onclick="manageGroups()">👑 그룹 관리 (제작자)</button>
+      
+      <label>🔑 그룹 비번: <input type="password" id="groupPassword" placeholder="그룹 비밀번호" style="width: 110px;"></label>
+      <label>🗓️ 주차: 
+        <select id="weekSelect" onchange="listenWeekData()"></select>
+      </label>
+      <label>캐릭터명: <input type="text" id="userName" placeholder="캐릭터명" style="width: 100px;"></label>
+      <button onclick="submitVote()">일정 제출</button>
+      
+      <button class="admin-btn" onclick="resetData()">⚙️ 데이터 초기화</button>
+    </div>
+
+    <table id="scheduleTable">
+      <thead>
+        <tr>
+          <th>시간 / 요일</th>
+          <th>수</th><th>목</th><th>금</th><th>토</th><th>일</th><th>월</th><th>화</th>
+        </tr>
+      </thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+
+    <h3>📊 [<span id="selectedGroupTitle">선택 안됨</span>] <span id="selectedWeekTitle"></span> 집계 결과 (총 참여자: <span id="totalVoters">0</span>명)</h3>
+    <p class="info-tip">💡 집계 결과의 각 칸에 마우스를 올리면 투표한 참여자 명단을 볼 수 있습니다.</p>
+    <div id="resultArea"></div>
+  </div>
+
+  <script>
+    // 👑 제작자(마스터) 전용 비밀번호
+    const MASTER_ADMIN_PASSWORD = "121414"; 
+
+    // ⚠️ [중요] 아래 Firebase 키 정보들을 본인 프로젝트 정보로 반드시 입력해주세요!
+  apiKey: "AIzaSyCZx609R9WK-E6bm20w9yd-a4Ga5cPUzQs",
+  authDomain: "vote-for-ur-times.firebaseapp.com",
+  databaseURL: "https://vote-for-ur-times-default-rtdb.firebaseio.com",
+  projectId: "vote-for-ur-times",
+  storageBucket: "vote-for-ur-times.firebasestorage.app",
+  messagingSenderId: "46760821663",
+  appId: "1:46760821663:web:e083bc63994fb8ee04f3aa",
+  measurementId: "G-6Y3XM8TV0T"
+};
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    const days = ['수', '목', '금', '토', '일', '월', '화'];
+    const times = ['오전 (~12시)', '오후 (~5시)', '저녁 (~9시)', '밤 (~12시)'];
+
+    let groupsData = {};
+    let isMouseDown = false;
+    let dragSelectMode = true;
+
+    document.addEventListener('mouseup', () => { isMouseDown = false; });
+
+    function handleMouseDown(cell) {
+      isMouseDown = true;
+      dragSelectMode = !cell.classList.contains('selected');
+      cell.classList.toggle('selected', dragSelectMode);
+    }
+
+    function handleMouseEnter(cell) {
+      if (isMouseDown) {
+        cell.classList.toggle('selected', dragSelectMode);
+      }
+    }
+
+    // 1️⃣ DB에서 그룹 목록 가져오기
+    function listenGroups() {
+      db.ref('groups').on('value', (snapshot) => {
+        groupsData = snapshot.val();
+        
+        if (!groupsData || Object.keys(groupsData).length === 0) {
+          db.ref('groups/default_group').set({
+            name: "기본 그룹",
+            password: "1234"
+          });
+          return;
+        }
+
+        const groupSelect = document.getElementById('groupSelect');
+        const currentSelected = groupSelect.value;
+        groupSelect.innerHTML = '';
+
+        Object.keys(groupsData).forEach(groupId => {
+          const option = document.createElement('option');
+          option.value = groupId;
+          option.innerText = groupsData[groupId].name;
+          groupSelect.appendChild(option);
+        });
+
+        if (currentSelected && groupsData[currentSelected]) {
+          groupSelect.value = currentSelected;
+        } else {
+          groupSelect.selectedIndex = 0;
+        }
+
+        listenWeekData();
+      }, (error) => {
+        alert("파이어베이스 연결 실패! API Key 및 Database URL을 확인하세요.\n오류: " + error.message);
+      });
+    }
+
+    function initWeekSelect() {
+      const select = document.getElementById('weekSelect');
+      const now = new Date();
+      const currentDay = now.getDay(); 
+      const distanceToWednesday = (currentDay >= 3 ? 3 - currentDay : 3 - currentDay - 7);
+      
+      for (let i = 0; i < 3; i++) {
+        const wednesday = new Date(now);
+        wednesday.setDate(now.getDate() + distanceToWednesday + (i * 7));
+        
+        const tuesday = new Date(wednesday);
+        tuesday.setDate(wednesday.getDate() + 6);
+        
+        const year = wednesday.getFullYear();
+        const startMonth = String(wednesday.getMonth() + 1).padStart(2, '0');
+        const startDate = String(wednesday.getDate()).padStart(2, '0');
+
+        const endMonth = String(tuesday.getMonth() + 1).padStart(2, '0');
+        const endDate = String(tuesday.getDate()).padStart(2, '0');
+        
+        const weekKey = `${year}-${startMonth}-${startDate}_주차`;
+        const labelPrefix = i === 0 ? '이번 주' : (i === 1 ? '다음 주' : '다다음 주');
+        const labelText = `${labelPrefix} (${startMonth}/${startDate} ~ ${endMonth}/${endDate})`;
+        
+        const option = document.createElement('option');
+        option.value = weekKey;
+        option.innerText = labelText;
+        select.appendChild(option);
+      }
+    }
+
+    const tbody = document.getElementById('tableBody');
+    times.forEach(time => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<th>${time}</th>` + days.map(day => {
+        const key = `${day}-${time}`;
+        return `<td class="cell" data-key="${key}" onmousedown="handleMouseDown(this)" onmouseenter="handleMouseEnter(this)"></td>`;
+      }).join('');
+      tbody.appendChild(tr);
+    });
+
+    function onGroupChange() {
+      listenWeekData();
+    }
+
+    // 👑 2️⃣ 제작자 그룹 관리 (생성, 그룹명 변경, 비번 변경, 삭제)
+    function manageGroups() {
+      const masterPass = prompt("👑 제작자 마스터 비밀번호를 입력하세요:");
+      if (masterPass === null) return;
+
+      if (masterPass !== MASTER_ADMIN_PASSWORD) {
+        alert("제작자 비밀번호가 일치하지 않습니다.");
+        return;
+      }
+
+      const groupSelect = document.getElementById('groupSelect');
+      const groupId = groupSelect.value;
+      const currentName = groupsData[groupId]?.name || '';
+
+      const choice = prompt(
+        `👑 제작자 그룹 관리 메뉴 (현재 선택: ${currentName || '없음'})\n\n` +
+        `1 : 새로운 그룹 생성\n` +
+        `2 : 현재 선택된 그룹 이름 변경\n` +
+        `3 : 현재 선택된 그룹 비밀번호 변경\n` +
+        `4 : 현재 선택된 그룹 삭제`
+      );
+
+      if (choice === '1') {
+        const groupName = prompt("새로 만들 그룹의 이름을 입력하세요 (예: 1분대, 공격대B):")?.trim();
+        if (!groupName) return;
+
+        const groupPass = prompt(`[${groupName}] 그룹원들이 사용할 비밀번호를 입력하세요:`)?.trim();
+        if (!groupPass) return;
+
+        const newGroupId = 'group_' + Date.now();
+        db.ref(`groups/${newGroupId}`).set({
+          name: groupName,
+          password: groupPass
+        }).then(() => alert(`'${groupName}' 그룹이 생성되었습니다!`))
+          .catch((err) => alert("생성 실패: " + err.message));
+
+      } else if (choice === '2') {
+        if (!groupId || !groupsData[groupId]) {
+          alert("이름을 변경할 그룹을 먼저 선택해주세요.");
+          return;
+        }
+
+        const newName = prompt(`[${currentName}] 그룹의 새 이름을 입력하세요:`, currentName)?.trim();
+        if (!newName || newName === currentName) return;
+
+        db.ref(`groups/${groupId}/name`).set(newName)
+          .then(() => alert(`그룹 이름이 '${newName}'(으)로 변경되었습니다.`))
+          .catch((err) => alert("변경 실패: " + err.message));
+
+      } else if (choice === '3') {
+        if (!groupId || !groupsData[groupId]) {
+          alert("비밀번호를 변경할 그룹을 먼저 선택해주세요.");
+          return;
+        }
+
+        const newPass = prompt(`[${currentName}] 그룹의 새 비밀번호를 입력하세요:`)?.trim();
+        if (!newPass) return;
+
+        db.ref(`groups/${groupId}/password`).set(newPass)
+          .then(() => alert(`[${currentName}] 그룹의 비밀번호가 변경되었습니다.`))
+          .catch((err) => alert("변경 실패: " + err.message));
+
+      } else if (choice === '4') {
+        if (!groupId || !groupsData[groupId]) {
+          alert("삭제할 그룹을 먼저 선택해주세요.");
+          return;
+        }
+
+        const confirmDelete = confirm(`⚠️ 정말로 [${currentName}] 그룹과 관련 투표 데이터를 삭제하시겠습니까?`);
+        if (confirmDelete) {
+          db.ref(`groups/${groupId}`).remove();
+          db.ref(`votes/${groupId}`).remove()
+            .then(() => alert(`[${currentName}] 그룹이 삭제되었습니다.`));
+        }
+      }
+    }
+
+    // 3️⃣ 일정 제출
+    function submitVote() {
+      const groupSelect = document.getElementById('groupSelect');
+      const groupId = groupSelect.value;
+      if (!groupId || !groupsData[groupId]) {
+        alert('그룹을 먼저 선택하거나 생성해주세요.');
+        return;
+      }
+
+      const groupName = groupsData[groupId].name;
+      const correctPass = groupsData[groupId].password;
+      const inputPassword = document.getElementById('groupPassword').value;
+      const name = document.getElementById('userName').value.trim();
+      const weekKey = document.getElementById('weekSelect').value;
+
+      if (inputPassword !== correctPass) {
+        alert(`[${groupName}] 그룹 비밀번호가 올바르지 않습니다.`);
+        return;
+      }
+
+      if (!name) {
+        alert('캐릭터명을 입력해주세요.');
+        return;
+      }
+
+      const selectedCells = document.querySelectorAll('.cell.selected');
+      const userVotes = [];
+      selectedCells.forEach(cell => {
+        userVotes.push(cell.getAttribute('data-key'));
+        cell.classList.remove('selected');
+      });
+
+      db.ref(`votes/${groupId}/${weekKey}/${name}`).set(userVotes, (error) => {
+        if (error) {
+          alert('저장 실패: ' + error.message);
+        } else {
+          alert(`[${groupName}] ${name}님의 일정이 제출되었습니다!`);
+          document.getElementById('userName').value = '';
+        }
+      });
+    }
+
+    let currentListener = null;
+
+    // 4️⃣ 실시간 데이터 연결
+    function listenWeekData() {
+      const groupSelect = document.getElementById('groupSelect');
+      const groupId = groupSelect.value;
+      if (!groupId || !groupsData[groupId]) {
+        document.getElementById('selectedGroupTitle').innerText = "그룹 없음";
+        document.getElementById('resultArea').innerHTML = "";
+        return;
+      }
+
+      const groupName = groupsData[groupId].name;
+      document.getElementById('selectedGroupTitle').innerText = groupName;
+
+      const weekSelect = document.getElementById('weekSelect');
+      const weekKey = weekSelect.value;
+      const selectedOptionText = weekSelect.options[weekSelect.selectedIndex]?.text || '';
+      document.getElementById('selectedWeekTitle').innerText = selectedOptionText;
+
+      if (currentListener) {
+        currentListener.off();
+      }
+
+      currentListener = db.ref(`votes/${groupId}/${weekKey}`);
+      currentListener.on('value', (snapshot) => {
+        const data = snapshot.val() || {};
+        const totalVotersSet = new Set(Object.keys(data));
+        const totalCount = totalVotersSet.size;
+
+        document.getElementById('totalVoters').innerText = totalCount;
+
+        const voterMap = {};
+        times.forEach(t => days.forEach(d => voterMap[`${d}-${t}`] = []));
+
+        Object.entries(data).forEach(([userName, userSelectedArray]) => {
+          if (Array.isArray(userSelectedArray)) {
+            userSelectedArray.forEach(key => {
+              if (voterMap[key]) {
+                voterMap[key].push(userName);
+              }
+            });
+          }
+        });
+
+        let html = '<table><thead><tr><th>시간 / 요일</th>' + 
+                   days.map(d => `<th>${d}</th>`).join('') + '</tr></thead><tbody>';
+
+        times.forEach(time => {
+          html += `<tr><th>${time}</th>`;
+          days.forEach(day => {
+            const key = `${day}-${time}`;
+            const voterList = voterMap[key] || [];
+            const count = voterList.length;
+            
+            let bg = '#ffffff';
+            let color = '#333333';
+
+            if (count === 1) bg = '#B2F2BB';
+            else if (count === 2) bg = '#FFF3BF';
+            else if (count === 3) bg = '#FFD8A8';
+            else if (count >= 4) bg = '#FFC9C9';
+
+            const titleAttr = count > 0 ? `title="참여 유저: ${voterList.join(', ')}"` : 'title="참여자 없음"';
+
+            html += `<td class="result-cell" ${titleAttr} style="background-color: ${bg}; color: ${color};">${count}명</td>`;
+          });
+          html += '</tr>';
+        });
+
+        html += '</tbody></table>';
+        document.getElementById('resultArea').innerHTML = html;
+      });
+    }
+
+    // 5️⃣ 데이터 초기화
+    function resetData() {
+      const groupSelect = document.getElementById('groupSelect');
+      const groupId = groupSelect.value;
+      if (!groupId || !groupsData[groupId]) return;
+
+      const groupName = groupsData[groupId].name;
+      const correctPass = groupsData[groupId].password;
+      const inputPassword = document.getElementById('groupPassword').value;
+
+      if (inputPassword !== correctPass) {
+        alert(`[${groupName}] 그룹 비밀번호가 올바르지 않아 초기화할 수 없습니다.`);
+        return;
+      }
+
+      const weekSelect = document.getElementById('weekSelect');
+      const weekKey = weekSelect.value;
+      const selectedOptionText = weekSelect.options[weekSelect.selectedIndex].text;
+
+      const choice = prompt(
+        `⚙️ [${groupName}] 데이터 초기화\n\n` +
+        `원하시는 초기화 방식을 숫자로 입력하세요:\n` +
+        `1 : 현재 선택된 주차만 삭제 (${selectedOptionText})\n` +
+        `2 : [${groupName}]의 모든 주차 데이터 전체 삭제`
+      );
+
+      if (choice === '1') {
+        db.ref(`votes/${groupId}/${weekKey}`).remove()
+          .then(() => alert(`[${groupName}]의 '${selectedOptionText}' 데이터가 초기화되었습니다.`))
+          .catch((err) => alert("초기화 실패: " + err.message));
+      } else if (choice === '2') {
+        const confirmAll = confirm(`⚠️ 정말로 [${groupName}]의 모든 주차 데이터를 전부 삭제하시겠습니까?`);
+        if (confirmAll) {
+          db.ref(`votes/${groupId}`).remove()
+            .then(() => alert(`[${groupName}]의 전체 데이터가 초기화되었습니다.`))
+            .catch((err) => alert("초기화 실패: " + err.message));
+        }
+      } else if (choice !== null) {
+        alert("올바른 번호(1 또는 2)를 입력해주세요.");
+      }
+    }
+
+    initWeekSelect();
+    listenGroups();
+  </script>
+</body>
+</html>
