@@ -88,17 +88,23 @@
         background: rgba(255, 255, 255, 0.85); 
     }
     button { cursor: pointer; font-weight: 700; }
-    .master-btn { background-color: #4a90e2; color: white; border: none; }
-    .master-btn:hover { background-color: #357abd; }
     
-    /* ⬛ 축소 및 검정 초기화 버튼 */
+    /* ⬛ 제작자 전용 우측 검정 소형 버튼 그룹 */
+    .admin-btn-group {
+        margin-left: auto;
+        display: flex;
+        gap: 6px;
+    }
+
     .admin-btn { 
         background-color: #222222; 
         color: white; 
         border: none; 
-        margin-left: auto; 
-        padding: 5px 8px; 
+        padding: 6px 10px; 
         font-size: 12px; 
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: 700;
     }
     .admin-btn:hover { background-color: #000000; }
     
@@ -110,26 +116,34 @@
 <body>
 
   <div class="main-container">
-    <h2>📅 공격대별 일정 조율표</h2>
+    <h2>📅 공대원 일정표</h2>
     <p>그룹을 선택하고 비밀번호를 입력한 뒤, 가능하신 시간대를 클릭 또는 드래그하여 [일정 제출]을 누르세요.</p>
     
     <div class="control-panel">
+      <!-- 1. 그룹 선택 -->
       <label>🛡️ 그룹 선택: 
         <select id="groupSelect" onchange="onGroupChange()">
           <option value="">그룹 불러오는 중...</option>
         </select>
       </label>
-      <button class="master-btn" onclick="manageGroups()">👑 그룹 관리 (제작자)</button>
-      
+
+      <!-- 2. 그룹 비번 -->
       <label>🔑 그룹 비번: <input type="password" id="groupPassword" placeholder="그룹 비밀번호" style="width: 110px;"></label>
+
+      <!-- 3. 주차 -->
       <label>🗓️ 주차: 
         <select id="weekSelect" onchange="listenWeekData()"></select>
       </label>
+
+      <!-- 4. 캐릭터명 및 제출 -->
       <label>캐릭터명: <input type="text" id="userName" placeholder="캐릭터명" style="width: 100px;"></label>
       <button onclick="submitVote()">일정 제출</button>
       
-      <!-- 👑 제작자 전용 축소된 검정 초기화 버튼 -->
-      <button class="admin-btn" onclick="resetData()">⚙️ 데이터 초기화 (제작자)</button>
+      <!-- 5. 우측 제작자 전용 버튼 그룹 (동일 스타일 적용) -->
+      <div class="admin-btn-group">
+        <button class="admin-btn" onclick="manageGroups()">👑 그룹 관리 (제작자)</button>
+        <button class="admin-btn" onclick="resetData()">⚙️ 데이터 초기화 (제작자)</button>
+      </div>
     </div>
 
     <table id="scheduleTable">
@@ -149,7 +163,7 @@
 
   <script>
     // 👑 제작자(마스터) 전용 비밀번호
-    const MASTER_ADMIN_PASSWORD = "121414"; 
+    const MASTER_ADMIN_PASSWORD = "admin"; 
 
     // ⚠️ [중요] 아래 Firebase 키 정보들을 본인 프로젝트 정보로 반드시 입력해주세요!
 const firebaseConfig = {
@@ -231,12 +245,12 @@ const firebaseConfig = {
       });
     }
 
-    // 🗓️ 8/12(수) 시작 주차 계산 함수 (순수 날짜만 표기: MM/DD ~ MM/DD)
+    // 🗓️ 최초 수요일(8/5) 기준 3개 주차 자동 생성 (표기: MM/DD ~ MM/DD)
     function initWeekSelect() {
       const select = document.getElementById('weekSelect');
       select.innerHTML = '';
       
-      const baseWednesday = new Date(2026, 7, 12); 
+      const baseWednesday = new Date(2026, 7, 5); 
 
       for (let i = 0; i < 3; i++) {
         const wednesday = new Date(baseWednesday);
@@ -254,7 +268,7 @@ const firebaseConfig = {
         
         const weekKey = `${year}-${startMonth}-${startDate}_주차`;
         
-        // 👈 순수 날짜 범위만 표시
+        // 순수 날짜 범위 표시
         const labelText = `${startMonth}/${startDate} ~ ${endMonth}/${endDate}`;
         
         const option = document.createElement('option');
