@@ -53,7 +53,7 @@
         border-radius: 8px;
     }
 
-    /* 표 스타일 (가독성 강화) */
+    /* 표 스타일 */
     table { 
         border-collapse: separate;
         border-spacing: 0;
@@ -89,7 +89,7 @@
     }
     button { cursor: pointer; font-weight: 700; }
     
-    /* ⬛ 제작자 전용 우측 검정 소형 버튼 그룹 */
+    /* ⬛ 우측 제작자 전용 버튼 그룹 */
     .admin-btn-group {
         margin-left: auto;
         display: flex;
@@ -116,7 +116,7 @@
 <body>
 
   <div class="main-container">
-    <h2>📅 공대원 일정표</h2>
+    <h2>📅 공대원 일정 실시간 반영표</h2>
     <p>그룹을 선택하고 비밀번호를 입력한 뒤, 가능하신 시간대를 클릭 또는 드래그하여 [일정 제출]을 누르세요.</p>
     
     <div class="control-panel">
@@ -130,7 +130,7 @@
       <!-- 2. 그룹 비번 -->
       <label>🔑 그룹 비번: <input type="password" id="groupPassword" placeholder="그룹 비밀번호" style="width: 110px;"></label>
 
-      <!-- 3. 주차 -->
+      <!-- 3. 주차 선택 -->
       <label>🗓️ 주차: 
         <select id="weekSelect" onchange="listenWeekData()"></select>
       </label>
@@ -139,7 +139,7 @@
       <label>캐릭터명: <input type="text" id="userName" placeholder="캐릭터명" style="width: 100px;"></label>
       <button onclick="submitVote()">일정 제출</button>
       
-      <!-- 5. 우측 제작자 전용 버튼 그룹 (동일 스타일 적용) -->
+      <!-- 5. 제작자 전용 버튼 그룹 -->
       <div class="admin-btn-group">
         <button class="admin-btn" onclick="manageGroups()">👑 그룹 관리 (제작자)</button>
         <button class="admin-btn" onclick="resetData()">⚙️ 데이터 초기화 (제작자)</button>
@@ -165,7 +165,7 @@
     // 👑 제작자(마스터) 전용 비밀번호
     const MASTER_ADMIN_PASSWORD = "admin"; 
 
-    // ⚠️ [중요] 아래 Firebase 키 정보들을 본인 프로젝트 정보로 반드시 입력해주세요!
+    // ⚠️ [중요] Firebase 연동 정보를 설정하세요
 const firebaseConfig = {
   apiKey: "AIzaSyCZx609R9WK-E6bm20w9yd-a4Ga5cPUzQs",
   authDomain: "vote-for-ur-times.firebaseapp.com",
@@ -201,7 +201,7 @@ const firebaseConfig = {
       }
     }
 
-    // 1️⃣ DB에서 그룹 목록 가져오기 (순서 order 기준 정렬)
+    // 1️⃣ DB에서 그룹 목록 가져오기
     function listenGroups() {
       db.ref('groups').on('value', (snapshot) => {
         groupsData = snapshot.val();
@@ -219,7 +219,6 @@ const firebaseConfig = {
         const currentSelected = groupSelect.value;
         groupSelect.innerHTML = '';
 
-        // order 속성을 기준으로 그룹 정렬
         const sortedKeys = Object.keys(groupsData).sort((a, b) => {
           const orderA = groupsData[a].order ?? 999;
           const orderB = groupsData[b].order ?? 999;
@@ -245,16 +244,27 @@ const firebaseConfig = {
       });
     }
 
-    // 🗓️ 최초 수요일(8/5) 기준 3개 주차 자동 생성 (표기: MM/DD ~ MM/DD)
+    // 🗓️ 오늘 기준 '다음 주 수요일'부터 3개 주차 자동 생성 (현재 주차 제외)
     function initWeekSelect() {
       const select = document.getElementById('weekSelect');
       select.innerHTML = '';
       
-      const baseWednesday = new Date(2026, 7, 5); 
+      const today = new Date();
+      const currentDay = today.getDay(); // 0(일) ~ 6(토)
+      
+      // 다가오는 다음 수요일(3)까지 남은 일수 계산
+      let daysUntilNextWednesday = (3 - currentDay + 7) % 7;
+      if (daysUntilNextWednesday === 0) {
+        daysUntilNextWednesday = 7;
+      }
+
+      const nextWednesday = new Date(today);
+      nextWednesday.setDate(today.getDate() + daysUntilNextWednesday);
+      nextWednesday.setHours(0, 0, 0, 0);
 
       for (let i = 0; i < 3; i++) {
-        const wednesday = new Date(baseWednesday);
-        wednesday.setDate(baseWednesday.getDate() + (i * 7));
+        const wednesday = new Date(nextWednesday);
+        wednesday.setDate(nextWednesday.getDate() + (i * 7));
         
         const tuesday = new Date(wednesday);
         tuesday.setDate(wednesday.getDate() + 6);
@@ -267,8 +277,6 @@ const firebaseConfig = {
         const endDate = String(tuesday.getDate()).padStart(2, '0');
         
         const weekKey = `${year}-${startMonth}-${startDate}_주차`;
-        
-        // 순수 날짜 범위 표시
         const labelText = `${startMonth}/${startDate} ~ ${endMonth}/${endDate}`;
         
         const option = document.createElement('option');
@@ -491,7 +499,6 @@ const firebaseConfig = {
             const voterList = voterMap[key] || [];
             const count = voterList.length;
             
-            // 8단계 득표 색상 스케일
             let bg = 'rgba(255, 255, 255, 0.3)';
             let color = '#222222';
 
@@ -504,7 +511,6 @@ const firebaseConfig = {
             else if (count === 7) bg = 'rgba(125, 211, 252, 0.85)';
             else if (count >= 8) { bg = 'rgba(16, 185, 129, 0.95)'; color = '#ffffff'; }
 
-            // 0명일 때는 텍스트 표기 생략 (빈 칸)
             const cellText = count > 0 ? `${count}명` : '';
             const titleAttr = count > 0 ? `title="참여 유저: ${voterList.join(', ')}"` : '';
 
