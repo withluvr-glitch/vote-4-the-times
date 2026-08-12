@@ -189,14 +189,25 @@ const firebaseConfig = {
 
     document.addEventListener('mouseup', () => { isMouseDown = false; });
 
+    // 🚫 현재 선택된 주차가 투표 가능한지 검사 (이번주는 조회 전용, 다음주부터 투표 가능)
+    function isCurrentWeekVoteable() {
+      const select = document.getElementById('weekSelect');
+      const selectedOption = select.options[select.selectedIndex];
+      return selectedOption && selectedOption.getAttribute('data-voteable') === 'true';
+    }
+
     function handleMouseDown(cell) {
+      if (!isCurrentWeekVoteable()) {
+        alert("이번주 주차는 조회 전용입니다. (투표는 다음 주차부터 가능합니다)");
+        return;
+      }
       isMouseDown = true;
       dragSelectMode = !cell.classList.contains('selected');
       cell.classList.toggle('selected', dragSelectMode);
     }
 
     function handleMouseEnter(cell) {
-      if (isMouseDown) {
+      if (isMouseDown && isCurrentWeekVoteable()) {
         cell.classList.toggle('selected', dragSelectMode);
       }
     }
@@ -244,7 +255,7 @@ const firebaseConfig = {
       });
     }
 
-    // 🗓️ 오늘 기준 '다음 주 수요일'부터 3개 주차 자동 생성 (현재 주차 제외)
+    // 🗓️ 주차 옵션 생성 (이번주부터 3주 뒤까지 생성)
     function initWeekSelect() {
       const select = document.getElementById('weekSelect');
       select.innerHTML = '';
@@ -252,19 +263,16 @@ const firebaseConfig = {
       const today = new Date();
       const currentDay = today.getDay(); // 0(일) ~ 6(토)
       
-      // 다가오는 다음 수요일(3)까지 남은 일수 계산
-      let daysUntilNextWednesday = (3 - currentDay + 7) % 7;
-      if (daysUntilNextWednesday === 0) {
-        daysUntilNextWednesday = 7;
-      }
+      // 이번 주 수요일 계산
+      let daysToThisWednesday = (currentDay >= 3) ? (currentDay - 3) : (currentDay + 4);
+      const thisWednesday = new Date(today);
+      thisWednesday.setDate(today.getDate() - daysToThisWednesday);
+      thisWednesday.setHours(0, 0, 0, 0);
 
-      const nextWednesday = new Date(today);
-      nextWednesday.setDate(today.getDate() + daysUntilNextWednesday);
-      nextWednesday.setHours(0, 0, 0, 0);
-
-      for (let i = 0; i < 3; i++) {
-        const wednesday = new Date(nextWednesday);
-        wednesday.setDate(nextWednesday.getDate() + (i * 7));
+      // 0(이번주)부터 +3(3주 뒤)까지 구성 (지난주 제거)
+      for (let i = 0; i <= 3; i++) {
+        const wednesday = new Date(thisWednesday);
+        wednesday.setDate(thisWednesday.getDate() + (i * 7));
         
         const tuesday = new Date(wednesday);
         tuesday.setDate(wednesday.getDate() + 6);
@@ -277,11 +285,31 @@ const firebaseConfig = {
         const endDate = String(tuesday.getDate()).padStart(2, '0');
         
         const weekKey = `${year}-${startMonth}-${startDate}_주차`;
-        const labelText = `${startMonth}/${startDate} ~ ${endMonth}/${endDate}`;
+        
+        let prefix = "";
+        let isVoteable = true;
+
+        if (i === 0) {
+          prefix = "[이번주] ";
+          isVoteable = false; // 🚫 투표 불가
+        } else {
+          prefix = `[다음주 ${i}차] `;
+          isVoteable = true;  // ✅ 투표 가능
+        }
+
+        const voteableTag = isVoteable ? "" : " (조회 전용)";
+        const labelText = `${prefix}${startMonth}/${startDate} ~ ${endMonth}/${endDate}${voteableTag}`;
         
         const option = document.createElement('option');
         option.value = weekKey;
         option.innerText = labelText;
+        option.setAttribute('data-voteable', isVoteable ? 'true' : 'false');
+
+        // 기본 선택값: 투표 조율이 필요한 [다음주 1차] 자동 선택
+        if (i === 1) {
+          option.selected = true;
+        }
+
         select.appendChild(option);
       }
     }
@@ -404,6 +432,11 @@ const firebaseConfig = {
 
     // 3️⃣ 일정 제출
     function submitVote() {
+      if (!isCurrentWeekVoteable()) {
+        alert("이번주 일정은 투표할 수 없습니다. (조회만 가능)");
+        return;
+      }
+
       const groupSelect = document.getElementById('groupSelect');
       const groupId = groupSelect.value;
       if (!groupId || !groupsData[groupId]) {
@@ -448,6 +481,8 @@ const firebaseConfig = {
 
     // 4️⃣ 실시간 데이터 연결
     function listenWeekData() {
+      document.querySelectorAll('.cell.selected').forEach(cell => cell.classList.remove('selected'));
+
       const groupSelect = document.getElementById('groupSelect');
       const groupId = groupSelect.value;
       if (!groupId || !groupsData[groupId]) {
