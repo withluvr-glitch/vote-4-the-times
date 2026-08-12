@@ -17,18 +17,18 @@
         color: #222222;
     }
 
-    /* 🖼️ 배경 이미지 설정 */
+    /* 🖼️ 배경 이미지 기본 스타일 (이미지 경로 및 랜덤 변경은 JS에서 처리) */
     body { 
         margin: 0;
         padding: 20px; 
         min-height: 100vh;
         box-sizing: border-box;
         position: relative;
-        background-image: url('bg.jpg'); /* 👈 깃허브 이미지 파일명 */
         background-size: cover;
         background-position: center;
         background-attachment: fixed;
         background-repeat: no-repeat;
+        transition: background-image 0.3s ease-in-out; /* 배경 전환 시 부드러운 효과 */
     }
 
     /* 중앙 메인 컨테이너 */
@@ -162,6 +162,19 @@
   </div>
 
   <script>
+    // 🎲 0️⃣ 배경 이미지 랜덤 설정 (4개 이미지 경로)
+    function setRandomBackground() {
+      const bgImages = [
+        'bg1.jpg',
+        'bg2.jpg',
+        'bg3.jpg',
+        'bg4.jpg'
+      ]; // 👈 실제 등록해두신 배경 이미지 파일명으로 수정 가능합니다.
+      
+      const randomIndex = Math.floor(Math.random() * bgImages.length);
+      document.body.style.backgroundImage = `url('${bgImages[randomIndex]}')`;
+    }
+
     // 👑 제작자(마스터) 전용 비밀번호
     const MASTER_ADMIN_PASSWORD = "admin"; 
 
@@ -604,6 +617,8 @@ const firebaseConfig = {
       }
     }
 
+    // 🚀 실행 초기화
+    setRandomBackground(); // 페이지 로드 시 랜덤 배경 적용
     initWeekSelect();
     listenGroups();
   </script>
